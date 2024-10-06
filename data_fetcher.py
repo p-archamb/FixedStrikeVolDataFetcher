@@ -1,13 +1,14 @@
-from distutils.core import setup
 
 import databento as db
 import asyncio
 from datetime import datetime, timedelta
 from config import DATABENTO_KEY, ES_FUTURES_SYMBOL
-from option_utils import get_next_four_fridays, generate_contracts
+from contract_generation import generate_contracts
+from date_utils import get_next_four_fridays
 
 class DataFetcher:
     def __init__(self):
+        self.es_options = []
         self.client = None
         self.es_futures_symbol = ES_FUTURES_SYMBOL
         self.es_futures_price = None
