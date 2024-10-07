@@ -2,6 +2,7 @@
 import databento as db
 import asyncio
 from datetime import datetime, timedelta
+from analytics import OptionsAnalytics
 from config import DATABENTO_KEY, ES_FUTURES_SYMBOL
 from contract_generation import generate_contracts
 from date_utils import get_next_four_fridays
@@ -18,6 +19,8 @@ class DataFetcher:
         self.options_symbol_to_instrument_id = {}
         self.options_symbol_prices_es = {}
         self.organized_options_prices_es = {}
+        self.iv_greeks = {}
+        self.option_analytics = OptionsAnalytics(0.05, 0)
 
     async def setup_connection(self, schema, symbol_subscription):
         max_attempts = 3
@@ -161,8 +164,8 @@ class DataFetcher:
             self.organized_options_prices_es[base_symbol][strike] = {}
         self.organized_options_prices_es[base_symbol][strike][option_type] = price
 
-
-
+    def process_analytics(self):
+        self.iv_greeks = self.option_analytics.calculative_iv_and_greeks(self.organized_options_prices_es, self.es_futures_price)
 
 
     async def close_connection(self):

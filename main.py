@@ -4,7 +4,7 @@ from data_fetcher import DataFetcher
 async def main():
     data_fetcher = DataFetcher()
     try:
-        await data_fetcher.setup_connection()
+        await data_fetcher.setup_connection("trades", "ESZ4")
         while True:
             await data_fetcher.fetch_data()
             await asyncio.sleep(180)

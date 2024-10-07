@@ -7,7 +7,7 @@ def generate_contracts(futures_price, days):
     for i, day in enumerate(days):
         week_of_month = get_week_of_month(day)
         day_of_week = day.strftime("%A") #Format code for the full name of the weekday
-        es_options_symbol = get_contract_symbol('ES', week_of_month, day_of_week, day)
+        es_options_symbol = get_contract_symbol('ES', int(week_of_month), day_of_week, day)
 
         if i == 0: #Next expiring Friday
             num_contracts = 25
@@ -61,7 +61,6 @@ def get_contract_symbol(ticker, week_of_month, day_of_week, date):
 
     month_letter = month_to_letter[date.month]
     year_digit = str(date.year)[-1]
-
     if is_end_of_month(date):
         return contract_mapping.get(ticker).get("EndOfMonth") + month_letter + year_digit
     else:
