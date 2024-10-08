@@ -2,10 +2,14 @@
 import databento as db
 import asyncio
 from datetime import datetime, timedelta
+
+import pytz
+
 from analytics import OptionsAnalytics
 from config import DATABENTO_KEY, ES_FUTURES_SYMBOL
 from contract_generation import generate_contracts
 from date_utils import get_next_four_fridays
+from database_manager import DatabaseManager
 
 class DataFetcher:
     def __init__(self):
@@ -21,6 +25,8 @@ class DataFetcher:
         self.organized_options_prices_es = {}
         self.iv_greeks = {}
         self.option_analytics = OptionsAnalytics(0.05, 0)
+        self.db_manager = DatabaseManager()
+
 
     async def setup_connection(self, schema, symbol_subscription):
         max_attempts = 3
@@ -46,9 +52,12 @@ class DataFetcher:
     #Function will fetch data from databento. Needs to first get current futures price to
     #determine which options strikes to get. Once options are received will call py_vollib library
     # to calculate iv, delta, gamma since databento does not provide this info.
+    #Postgres database will open connection before any connection to databento is opened, and will close
+    #after all data/analytics has been written to the database
     async def fetch_data(self):
         start_time = datetime.now()
         print(f"Starting data fetch at {start_time}")
+        self.db_manager.connect()
 
         await self.setup_connection("trades", self.es_futures_symbol)
         try:
@@ -63,6 +72,7 @@ class DataFetcher:
         end_time = datetime.now()
         execution_time = (end_time - start_time).total_seconds()
         print(f"Execution time: {execution_time} seconds")
+        self.db_manager.close()
 
     async def process_futures(self):
         self.futures_prices_received = False
@@ -96,7 +106,8 @@ class DataFetcher:
             converted_price = price / 1_000_000_000
             if symbol == self.es_futures_symbol:
                 self.es_futures_price = converted_price
-                #insert into postgres db
+                instrument_id = self.db_manager.insert_instrument(symbol, 'FUTURE')
+                self.db_manager.insert_futures_price(instrument_id, converted_price, datetime.now(pytz.timezone('US/Eastern')))
                 print(f"Received futures price: {self.es_futures_price}")
                 self.futures_prices_received = True
 
