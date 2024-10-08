@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS option_analytics (
     gamma NUMERIC(10, 6),
     vega NUMERIC(10, 6),
     theta NUMERIC(10, 6),
+    days_to_expiration INTEGER,
     timestamp TIMESTAMP WITH TIME ZONE NOT NULL
 );
 
@@ -55,5 +56,5 @@ CREATE TABLE IF NOT EXISTS daily_summary (
     previous_closing_iv NUMERIC(10, 4),
     high_iv NUMERIC(10, 4),
     low_iv NUMERIC(10, 4),
-    UNIQUE (instrument_id, date
+    UNIQUE (instrument_id, date)
 );

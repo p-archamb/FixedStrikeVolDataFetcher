@@ -47,15 +47,19 @@ class DatabaseManager:
     def insert_option_price(self, instrument_id, underlying_price, price, timestamp):
         query = sql.SQL("""
             INSERT INTO option_prices (instrument_id, underlying_price, price, timestamp)
-            VALUES (%s, %s, %s)
+            VALUES (%s, %s, %s, %s)
         """)
-        self.cursor.execute(query, (instrument_id, underlying_price, price, timestamp))
+        try:
+            self.cursor.execute(query, (instrument_id, underlying_price, price, timestamp))
+            self.connection.commit()
+        except psycopg2.Error as e:
+            print(e)
+
+    def insert_option_analytics(self, instrument_id, implied_volatility, delta, gamma, vega, theta, days_to_expiration, timestamp):
+        query = sql.SQL("""
+            INSERT INTO option_analytics (instrument_id, implied_volatility, delta, gamma, vega, theta, days_to_expiration, timestamp)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        """)
+        self.cursor.execute(query, (instrument_id, implied_volatility, delta, gamma, vega, theta, days_to_expiration, timestamp))
         self.connection.commit()
 
-    def insert_option_analytics(self, instrument_id, iv, delta, gamma, vega, theta, timestamp):
-        query = sql.SQL("""
-            INSERT INTO option_analytics (instrument_id, iv, delta, gamma, vega, theta, timestamp)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-        """)
-        self.cursor.execute(query, (instrument_id, iv, delta, gamma, vega, theta, timestamp))
-        self.connection.commit()

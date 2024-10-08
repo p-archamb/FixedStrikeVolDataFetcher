@@ -47,7 +47,6 @@ class DataFetcher:
                 else:
                     print(f"Failed to connect after {max_attempts} attemps: {e}")
 
-        #connect to my database
 
     #Function will fetch data from databento. Needs to first get current futures price to
     #determine which options strikes to get. Once options are received will call py_vollib library
@@ -55,6 +54,15 @@ class DataFetcher:
     #Postgres database will open connection before any connection to databento is opened, and will close
     #after all data/analytics has been written to the database
     async def fetch_data(self):
+        self.futures_prices_received = False
+        self.options_prices_received = False
+        self.es_futures_price = None
+        self.futures_symbol_to_instrument_id = {}
+        self.options_symbol_to_instrument_id = {}
+        self.options_symbol_prices_es = {}
+        self.organized_options_prices_es = {}
+        self.iv_greeks = {}
+
         start_time = datetime.now()
         print(f"Starting data fetch at {start_time}")
         self.db_manager.connect()
@@ -64,8 +72,8 @@ class DataFetcher:
             await self.process_futures()
             if self.futures_prices_received:
                 await self.process_options()
-
-            self.process_analytics()
+                if self.options_prices_received:
+                    self.process_analytics()
 
         except Exception as e:
             print(f"Error during data fetch: {e}")
@@ -106,8 +114,10 @@ class DataFetcher:
             converted_price = price / 1_000_000_000
             if symbol == self.es_futures_symbol:
                 self.es_futures_price = converted_price
-                instrument_id = self.db_manager.insert_instrument(symbol, 'FUTURE')
-                self.db_manager.insert_futures_price(instrument_id, converted_price, datetime.now(pytz.timezone('US/Eastern')))
+                db_instrument_id = self.db_manager.insert_instrument(symbol, 'FUTURE')
+                if db_instrument_id is None:
+                    print(f"Failed to insert futures instrument id to table for {symbol}")
+                self.db_manager.insert_futures_price(db_instrument_id, converted_price, datetime.now(pytz.timezone('US/Eastern')))
                 print(f"Received futures price: {self.es_futures_price}")
                 self.futures_prices_received = True
 
@@ -175,9 +185,26 @@ class DataFetcher:
             self.organized_options_prices_es[base_symbol][strike] = {}
         self.organized_options_prices_es[base_symbol][strike][option_type] = price
 
+    #Function to call the option_analytics class function to calculate iv and greeks. Will also pass in the function to
+    #write the data for all options into the postgres database.
     def process_analytics(self):
-        self.iv_greeks = self.option_analytics.calculative_iv_and_greeks(self.organized_options_prices_es, self.es_futures_price)
+        self.iv_greeks = self.option_analytics.calculate_iv_and_greeks(self.organized_options_prices_es, self.es_futures_price, self.insert_option_data_to_postgres)
 
+    #Function to insert all option data into the 3 option tables. Can only be called once all options data is available.
+    def insert_option_data_to_postgres(self, symbol, strike, option_type, price, underlying_price, expiration_date, iv, delta, gamma, vega, theta, dte):
+        full_symbol = f"{symbol} {option_type}{strike}"
+        try:
+            timestamp = datetime.now(pytz.timezone('US/Eastern'))
+            db_instrument_id = self.db_manager.insert_instrument(full_symbol, 'OPTION', symbol, strike, option_type, expiration_date)
+            if db_instrument_id is None:
+                print(f"Failed to insert options instrument id into table for {full_symbol}")
+                return
+            self.db_manager.insert_option_price(db_instrument_id, underlying_price, price, timestamp)
+            self.db_manager.insert_option_analytics(db_instrument_id, iv, delta, gamma, vega, theta, dte, timestamp)
+            print(f"Successfully inserted data into table for {full_symbol}")
+        except Exception as e:
+            print(f"Failed to insert data into table for {full_symbol}")
+            print(e)
 
     async def close_connection(self):
         if self.client:
