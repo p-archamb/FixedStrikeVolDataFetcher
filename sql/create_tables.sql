@@ -6,7 +6,8 @@ CREATE TABLE IF NOT EXISTS instruments (
     underlying_symbol VARCHAR(10),
     strike NUMERIC(10, 2),
     option_type CHAR(1),
-    expiration_date DATE
+    expiration_date DATE,
+    last_updated TIMESTAMP WITH TIME ZONE DEFAULT (CURRENT_TIMESTAMP AT TIME ZONE 'US/Eastern')
 );
 
 --Create the futures prices table

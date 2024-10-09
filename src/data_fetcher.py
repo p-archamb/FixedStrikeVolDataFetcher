@@ -1,18 +1,22 @@
 
 import databento as db
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import pytz
 
-from analytics import OptionsAnalytics
+from src.analytics.analytics import OptionsAnalytics
 from config import DATABENTO_KEY, ES_FUTURES_SYMBOL
-from contract_generation import generate_contracts
-from date_utils import get_next_four_fridays
-from database_manager import DatabaseManager
+from src.models.option import Option
+from src.models.option_manager import OptionManager
+from src.utils import parse_friday_expiration_date
+from src.utils.contract_generation import generate_contracts
+from src.utils.date_utils import get_next_four_fridays
+from src.database.database_manager import DatabaseManager
 
 class DataFetcher:
     def __init__(self):
+        self.option_manager = OptionManager()
         self.es_options = []
         self.client = None
         self.es_futures_symbol = ES_FUTURES_SYMBOL
@@ -143,7 +147,13 @@ class DataFetcher:
             instrument_id = record.hd.instrument_id
             symbol = record.stype_in_symbol
             print(f"Options Contract - {symbol} has an Instrument ID of {instrument_id}")
-            self.options_symbol_to_instrument_id[instrument_id] = symbol
+
+            base_symbol, option_info = symbol.rsplit(' ', 1)
+            option_type = option_info[0]
+            strike = float(option_info[1:])
+            expiration_date = parse_friday_expiration_date(symbol)
+            option = Option(symbol, base_symbol, strike, option_type, expiration_date, instrument_id)
+            self.option_manager.add_option(option)
 
     #Get price data for each option we are subscribed to. Store the prices in the options_symbol_prices dictionary
     async def options_callback_es(self, data):
@@ -158,17 +168,17 @@ class DataFetcher:
                     return
                 option_price = (raw_bid + raw_ask) / 2
                 price = option_price / 1_000_000_000
-                symbol = self.options_symbol_to_instrument_id.get(instrument_id)
+
+                option = self.option_manager.get_option_by_instrument_id(instrument_id)
+                if option:
+                    option.price = price
+                    print(f"Updated price for {option.symbol}: {price}")
 
                 #Once received price for option, will put it into a new nested dictionary
-                if symbol and price is not None:
-                    self.options_symbol_prices_es[symbol] = price
-                    self.restructure_options_data(symbol, price)
-                    print(f"Updated price for {symbol}: {price}")
+                if all(option.price is not None for option in self.option_manager.get_all_options()):
+                    self.options_prices_received = True
+                    print("All options prices received.")
 
-            if all(self.options_symbol_prices_es.get(symbol) is not None for symbol in self.es_options):
-                self.options_prices_received = True
-                print("All options prices received.")
         except Exception as e:
             print(f"Failed to process options data: {e}")
 
@@ -188,23 +198,25 @@ class DataFetcher:
     #Function to call the option_analytics class function to calculate iv and greeks. Will also pass in the function to
     #write the data for all options into the postgres database.
     def process_analytics(self):
-        self.iv_greeks = self.option_analytics.calculate_iv_and_greeks(self.organized_options_prices_es, self.es_futures_price, self.insert_option_data_to_postgres)
+        options = self.option_manager.get_all_options()
+        self.option_analytics.calculate_iv_and_greeks(options, self.es_futures_price)
+        self.insert_option_data_to_postgres(options)
 
     #Function to insert all option data into the 3 option tables. Can only be called once all options data is available.
-    def insert_option_data_to_postgres(self, symbol, strike, option_type, price, underlying_price, expiration_date, iv, delta, gamma, vega, theta, dte):
-        full_symbol = f"{symbol} {option_type}{strike}"
+    def insert_option_data_to_postgres(self, options):
         try:
             timestamp = datetime.now(pytz.timezone('US/Eastern'))
-            db_instrument_id = self.db_manager.insert_instrument(full_symbol, 'OPTION', symbol, strike, option_type, expiration_date)
-            if db_instrument_id is None:
-                print(f"Failed to insert options instrument id into table for {full_symbol}")
-                return
-            self.db_manager.insert_option_price(db_instrument_id, underlying_price, price, timestamp)
-            self.db_manager.insert_option_analytics(db_instrument_id, iv, delta, gamma, vega, theta, dte, timestamp)
-            print(f"Successfully inserted data into table for {full_symbol}")
+            for option in options:
+
+                db_instrument_id = self.db_manager.insert_instrument(option.symbol, 'OPTION', option.base_symbol, option.strike, option.option_type, option.expiration_date)
+                if db_instrument_id is None:
+                    print(f"Failed to insert options instrument id into table for {option.symbol}")
+                    return
+                self.db_manager.insert_option_price(db_instrument_id, self.es_futures_price, option.price, timestamp)
+                self.db_manager.insert_option_analytics(db_instrument_id, option.iv, option.delta, option.gamma, option.vega, option.theta, option.dte, timestamp)
+                print(f"Successfully inserted data into table for {option.symbol}")
         except Exception as e:
-            print(f"Failed to insert data into table for {full_symbol}")
-            print(e)
+            print(f"Failed to insert options data: {e}")
 
     async def close_connection(self):
         if self.client:

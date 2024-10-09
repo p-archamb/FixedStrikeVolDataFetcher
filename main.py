@@ -1,5 +1,5 @@
 import asyncio
-from data_fetcher import DataFetcher
+from src.data_fetcher import DataFetcher
 
 async def main():
     data_fetcher = DataFetcher()
