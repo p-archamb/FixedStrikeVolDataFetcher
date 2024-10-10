@@ -24,10 +24,7 @@ class DataFetcher:
         self.futures_prices_received = False
         self.options_prices_received = False
         self.futures_symbol_to_instrument_id = {}
-        self.options_symbol_to_instrument_id = {}
-        self.options_symbol_prices_es = {}
         self.organized_options_prices_es = {}
-        self.iv_greeks = {}
         self.option_analytics = OptionsAnalytics(0.05, 0)
         self.db_manager = DatabaseManager()
 
@@ -62,10 +59,7 @@ class DataFetcher:
         self.options_prices_received = False
         self.es_futures_price = None
         self.futures_symbol_to_instrument_id = {}
-        self.options_symbol_to_instrument_id = {}
-        self.options_symbol_prices_es = {}
         self.organized_options_prices_es = {}
-        self.iv_greeks = {}
 
         start_time = datetime.now()
         print(f"Starting data fetch at {start_time}")
