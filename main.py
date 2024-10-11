@@ -7,7 +7,7 @@ async def main():
         await data_fetcher.setup_connection("trades", "ESZ4")
         while True:
             await data_fetcher.fetch_data()
-            await asyncio.sleep(180)
+            await asyncio.sleep(60)
     finally:
         await data_fetcher.close_connection()
 if __name__ == "__main__":
