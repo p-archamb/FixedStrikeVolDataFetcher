@@ -10,7 +10,7 @@ def get_next_four_fridays():
     nyse = mcal.get_calendar('NYSE')
     fridays = []
     current_date = today
-    while len(fridays) < 3:
+    while len(fridays) < 2:
         days_until_friday = (4 - current_date.weekday() + 7) % 7
         if days_until_friday == 0:
             days_until_friday = 7

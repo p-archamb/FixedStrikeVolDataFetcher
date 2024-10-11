@@ -28,7 +28,8 @@ class DatabaseManager:
             (symbol, instrument_type, underlying_symbol, strike, option_type, expiration_date)
             VALUES (%s, %s, %s, %s, %s, %s)
             ON CONFLICT (symbol) 
-            DO UPDATE SET symbol = EXCLUDED.symbol --Symbol stays the same, but now will return the id of the existing record
+            DO UPDATE SET 
+                last_updated = CURRENT_TIMESTAMP AT TIME ZONE 'US/Eastern'--update the timestamp in the instrument table to know which instruments we used today
             RETURNING id
         """)
         self.cursor.execute(query, (symbol, instrument_type, underlying_symbol, strike, option_type, expiration_date))
